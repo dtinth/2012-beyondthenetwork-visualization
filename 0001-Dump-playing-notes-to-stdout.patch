@@ -1,0 +1,101 @@
+From 15dd0b780ec7b268bda93c29a5afd42cea616718 Mon Sep 17 00:00:00 2001
+From: Thai Pangsakulyanont <dtinth@spacet.me>
+Date: Thu, 22 Nov 2012 15:48:59 +0000
+Subject: [PATCH] Dump playing notes to stdout
+
+---
+ include/sndfile.h |  2 ++
+ player/sndmix.c   | 42 ++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 44 insertions(+)
+
+diff --git a/include/sndfile.h b/include/sndfile.h
+index 365a23e9..a7232824 100644
+--- a/include/sndfile.h
++++ b/include/sndfile.h
+@@ -597,6 +597,8 @@ typedef struct song {
+ 
+         // multi-write stuff -- NULL if no multi-write is in progress, else array of one struct per channel
+         struct multi_write *multi_write;
++        uint32_t frames;
++        char draw_strings[MAX_CHANNELS][64];
+ } song_t;
+ 
+ song_note_t *csf_allocate_pattern(uint32_t rows);
+diff --git a/player/sndmix.c b/player/sndmix.c
+index a474c82e..7c60e256 100644
+--- a/player/sndmix.c
++++ b/player/sndmix.c
+@@ -25,6 +25,8 @@
+ #include "snd_fm.h"
+ #include "snd_gm.h"
+ #include "cmixer.h"
++#include "it.h"
++#include <string.h>
+ 
+ #include "util.h" /* for clamp */
+ 
+@@ -858,6 +860,7 @@ unsigned int csf_read(song_t *csf, void * v_buffer, unsigned int bufsize)
+ 
+                 // Buffer ready
+                 bufleft -= count;
++                csf->frames += count;
+                 csf->buffer_count -= count;
+         }
+ 
+@@ -1005,7 +1008,43 @@ int csf_process_tick(song_t *csf)
+                 song_voice_t *chan = csf->voices;
+                 song_note_t *m = csf->patterns[csf->current_pattern] + csf->row * MAX_CHANNELS;
+ 
++                printf("%u %d %d", csf->frames, csf->process_row, csf->process_order);
++
+                 for (unsigned int nchan=0; nchan<MAX_CHANNELS; chan++, nchan++, m++) {
++                        char note_buf[4], ins_buf[3], vol_buf[3], effect_buf[4];
++                        char buf[64];
++                        get_note_string(m->note, note_buf);
++                        if (note_buf[0] == (char)173) note_buf[0] = note_buf[1] = note_buf[2] = '.';
++                        if (note_buf[0] == (char)94) note_buf[0] = note_buf[1] = note_buf[2] = '^';
++                        if (note_buf[0] == (char)205) note_buf[0] = note_buf[1] = note_buf[2] = '=';
++                        if (note_buf[0] == (char)126) note_buf[0] = note_buf[1] = note_buf[2] = '-';
++                        if (m->instrument) {
++                                num99tostr(m->instrument, ins_buf);
++                        } else {
++                                ins_buf[0] = ins_buf[1] = '.';
++                                ins_buf[2] = 0;
++                        }
++                        get_volume_string(m->volparam, m->voleffect, vol_buf);
++                        if (vol_buf[0] == (char)173) vol_buf[0] = vol_buf[1] = '.';
++                        sprintf(effect_buf, "%c%02X", get_effect_char(m->effect),
++                                m->param);
++
++                        int voice_int = -1;
++
++                        if (nchan < MAX_VOICES) {
++                                song_voice_t *voice = csf->voices + nchan;
++                                if (!(voice->current_sample_data && voice->length)) {
++                                } else if (voice->ptr_sample) {
++                                        voice_int = voice->final_volume;
++                                }
++                        }
++
++                        sprintf(buf, "[%u %d %s %s %s %s]", nchan, voice_int, note_buf, ins_buf, vol_buf, effect_buf);
++                        if (strcmp(buf, csf->draw_strings[nchan]) != 0) {
++                                printf(" %s", buf);
++                                strcpy(csf->draw_strings[nchan], buf);
++                        }
++
+                         // this is where we're going to spit out our midi
+                         // commands... ALL WE DO is dump raw midi data to
+                         // our super-secret "midi buffer"
+@@ -1030,6 +1069,9 @@ int csf_process_tick(song_t *csf)
+                         chan->n_command = 0;
+                 }
+ 
++                printf("\n");
++
++
+                 csf_process_effects(csf, 1);
+         } else {
+                 /* [-- No --] */
+-- 
+2.18.0
+
