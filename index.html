@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<title>Beyond the Network</title>
+<style>body { background: black; }</style>
+<body>
+<script src="beyond.js"></script>
+<audio style="width:90%" id="song" src="beyond.ogg" controls></audio><br>
+<canvas id="canvas"></canvas>
+
+<script>
+
+var info = []
+
+var tracklist = [
+    [0, 'Beyond the Network', 0]
+  , [9, 'The Journey Begins', 0]
+  , [20, 'Rain of Lights', 1]
+  , [28, 'LightStorm', 2]
+  , [40, 'Sea of Amorphity', 1]
+  , [52, 'Masked Intentions', 0]
+  , [68, 'Routinoid', 3]
+  , [89, 'Tunnel Society v2.0', 0]
+  , [120, 'A New Beginning (intro 2)', 2]
+  , [124, 'Silent Conquest', 1]
+  , [139, 'Schein', 4]
+  , [149, 'Choose and Contemplate', 1]
+  , [158, 'Breathing Love', 4]
+  , [167, 'Jewels of Denial', 0]
+  , [182, '']
+  ]
+
+var tracks = []
+
+;(function() {
+  var cached = {}
+  for (var i = 0; i < songdata.length; i ++) {
+    var c = songdata[i]
+      , n = songdata[i + 1]
+      , l = songdata[i - 1]
+      , channels = []
+    if (tracklist.length > 0 && c.order >= tracklist[0][0]) {
+      tracks.push({ theme: tracklist[0][2], song: tracklist[0][1], sample: c.sample, order: tracklist[0][0] })
+      tracklist.shift()
+    }
+    for (var j = 0; j < c.text.length; j ++) {
+      cached[c.text[j][0]] = { text: c.text[j][1].split(' '), volume: c.text[j][2] }
+    }
+    for (var j = 0; j < 14; j ++) {
+      channels.push(cached[j])
+    }
+    info.push({
+      sample: c.sample
+    , row: c.row
+    , order: c.order
+    , neworder: !l || l.order != c.order
+    , channels: channels
+    })
+  }
+})()
+
+
+var canvas = document.getElementById('canvas')
+var width, height;
+canvas.width = width = 960;
+canvas.height = height = 540;
+canvas.width = 1280
+canvas.height = 720
+
+var ctx = canvas.getContext('2d')
+ctx.scale(canvas.width / width, canvas.height / height)
+
+function getrow(sample) {
+  var min = 0, max = info.length - 1, left = min, right = max
+  while (left <= right) {
+    var mid = Math.floor((left + right) / 2)
+    if (info[mid].sample <= sample) {
+      if (mid + 1 >= info.length || sample < info[mid + 1].sample) {
+        return mid
+      } else {
+        left = mid + 1
+      }
+    } else {
+      right = mid - 1
+    }
+  }
+  return -1
+}
+
+function gettrack(sample) {
+  var ret = 0
+  for (var i = 0; i < tracks.length; i ++) {
+    if (sample >= tracks[i].sample) ret = i
+  }
+  return ret
+}
+
+function draw(time) {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, width, height)
+  var sample = time * 44100
+  ctx.fillStyle = '#fff'
+  var row = getrow(sample)
+    , off = info[row] && info[row + 1] ? (sample - info[row].sample) / (info[row + 1].sample - info[row].sample) : 0
+  ctx.save()
+  ctx.font = 'bold 11px Ubuntu Mono'
+  var tno = gettrack(sample)
+  var track = tracks[tno]
+  for (var i = -30; i <= 36; i ++) {
+    var r = i + row
+    drawRow(info[r], 280 + (i - off) * 12 + 180 * Math.pow(Math.max(170000 - sample, 0) / 170000, 2), i == 0, info[r + 1], track.theme, sample)
+  }
+  ctx.restore()
+
+  ctx.save()
+  ctx.font = '200 30px Helvetica Neue'
+  ctx.fillStyle = 'rgba(255,255,255,' + Math.max(1 - info[row].row / 64, 0.4) + ')'
+  ctx.textAlign = 'right'
+  ctx.fillText(info[row].order, 906, 40)
+  ctx.font = '500 14px Helvetica Neue'
+  ctx.textAlign = 'left'
+  ctx.fillText(': ' + info[row].row, 910, 40)
+  ctx.restore()
+
+  ctx.save()
+  ctx.font = '800 30px Helvetica Neue'
+  ctx.fillStyle = '#fff'
+  var alpha = Math.pow(Math.max(0, 1 - (sample - track.sample) / 300000), 3)
+  ctx.fillText((tno + 1) + '. ' + track.song, 20, 40)
+  if (1||gettrack(sample) > 0) {
+    if (alpha > 0.01) {
+      ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
+      ctx.fillRect(0, 0, width, height)
+    }
+  }
+  alpha = Math.pow(Math.max(0, Math.min(1, 1 - (sample - 200000) / 400000)), 2)
+  if (alpha >= 0.01) {
+    ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
+    ctx.font = '600 20px Helvetica Neue'
+    ctx.fillText('Bejeweled II suite', 54, 70)
+    ctx.fillText('(C) Peter Hajba 2003/2004', 54, 96)
+  }
+  ctx.restore()
+}
+function drawRow(row, y, active, ahead, theme, sample) {
+  if (row == undefined) return
+  if (row.neworder) {
+    if (sample >= row.sample) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.36 + 0.6 * Math.pow(Math.max(0, 1 - (sample - row.sample) / 80000), 2)).toFixed(3) + ')'
+      ctx.fillRect(0, y - 11, width, 2)
+    }
+  }
+  for (var i = 0; i < 14; i ++) {
+    var cur = row.channels[i]
+      , text = cur.text
+      , fx = text[3]
+    if (fx == '.00') fx = '...'
+    /*if (active) {
+      ctx.fillStyle = '#fff'
+    } else {*/
+      var volume = (ahead || row).channels[i].volume
+      if (volume == -1) {
+        ctx.fillStyle = '#333'
+      } else {
+        var vol = Math.sqrt(volume / 16384)
+        var hue = Math.round(280 + (420 - 280) * vol)
+          , sat = 80
+          , light = 30 + vol * 30
+        if (theme == 1) {
+          hue = Math.round(250 - 80 * vol)
+        }
+        if (theme == 2) {
+          hue = Math.round(60 + 60 * vol)
+          light = 10 + Math.pow(vol, 3) * 50
+        }
+        if (theme == 3) {
+          hue = Math.round(280 - 140 * vol)
+        }
+        if (theme == 4) {
+          hue = Math.round(240 + 120 * vol)
+          light = 30 + Math.pow(vol, 2) * 50
+          sat = 80 + (vol) * 20
+        }
+        ctx.fillStyle = 'hsl(' + hue + ',' + sat + '%,' + light + '%)'
+      }
+    //}
+    ctx.fillText(text[0] + ' ' + text[1] + ' ' + fx, i * 67 + 18, y)
+    if (active) {
+      ctx.save()
+      if (text[0] != '...') {
+        ctx.shadowColor = ctx.fillStyle
+        ctx.shadowOffsetX = ctx.shadowOffsetY = 0
+        ctx.shadowBlur = 10
+      }
+      ctx.fillStyle = text[0] == '...' ? 'rgba(255,255,255,0.36)' : '#fff'
+      ctx.fillText(text[0] + ' ' + text[1] + ' ' + fx, i * 67 + 18, y)
+      ctx.restore()
+    }
+  }
+}
+
+var song = document.getElementById('song')
+
+setInterval(function() {
+  draw(song.currentTime)
+}, 1)
+
+</script>
+
+</body>
